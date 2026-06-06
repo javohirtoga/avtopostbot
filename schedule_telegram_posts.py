@@ -12,9 +12,6 @@ ROUTE_NAME = "Beshariq - Qo'qon - Dangara"
 # Use Tashkent timezone (UTC+5) for scheduled_date timestamps
 TASHKENT_TZ = datetime.timezone(datetime.timedelta(hours=5))
 
-# Message schedule times for each day
-SCHEDULE_TIMES = ["07:30", "11:30", "14:30", "17:30", "21:00"]
-
 # Delay between scheduling requests to avoid Telegram rate limits
 REQUEST_DELAY_SECONDS = 2
 
@@ -52,12 +49,14 @@ POST_TEXTS = [
     "Haydovchilar uchun imkoniyatlar kengaymoqda. Beshariq - Dangara yo'nalishida yo'lovchilar ko'p. Siz ham daromadingizni oshirishni boshlang.",
     "Yakshanba kuni sayohat uchun tinch dam olish kuni. Yo'lga chiqqaningizda hammasi tinch va shinam bo'ladi. Sizni ishonchli transport kutmoqda.",
     "Cargo va parcel xizmatimiz hafta oxirida ham ishlaydi. Yuklaringizni vaqtida yetkazib beramiz. Halol va tez xizmat bizning afzalliklarimizdan.",
-    "Yo'lovchilar uchun juda qulay sharoit yaratamiz. Beshariqdan Tashkentga bo'lgan yo'nalishda saloon har doim toza bo'ladi. Siz dam olishingiz uchun hammasi tayyor.",
+    "Yo'lovchilar uchun juda qulay sharoit yaratamiz. Beshariqdan Tashkentga bo'lgan yo'nalishda salon har doim toza bo'ladi. Siz dam olishingiz uchun hammasi tayyor.",
     "Ertangi sayohatni oxirgi daqiqada qoldirmang. Joylaringizni endi band qiling va yaxshi o'rinni tanlang. Kanalimizdagi xabarlar sizni qo'llab-quvvatlaydi.",
     "Haydovchilar uchun daromadni barqaror qilish mumkin. Yo'lovchilarni ko'proq jalb qilganda, daromadingiz ortadi. @javohir_baxodirov bilan bog'lanib, hamkorlikni boshlang."
 ]
 
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
+GET_UPDATES_URL = TELEGRAM_API_URL + "getUpdates"
+SEND_MESSAGE_URL = TELEGRAM_API_URL + "sendMessage"
 
 # Inline keyboard markup with admin contact and channel button
 REPLY_MARKUP = {
@@ -70,32 +69,24 @@ REPLY_MARKUP = {
 }
 
 
-def get_next_monday(start_date: datetime.date) -> datetime.date:
-    days_ahead = (0 - start_date.weekday()) % 7
-    return start_date + datetime.timedelta(days=days_ahead)
+def get_updates(offset=None, timeout=20):
+    params = {"timeout": timeout, "allowed_updates": ["message"]}
+    if offset is not None:
+        params["offset"] = offset
 
-
-def build_schedule_dates() -> list[datetime.datetime]:
-    today = datetime.datetime.now(tz=TASHKENT_TZ).date()
-    first_monday = get_next_monday(today)
-    schedule_dates = []
-
-    for day_offset in range(7):
-        current_date = first_monday + datetime.timedelta(days=day_offset)
-        for schedule_time in SCHEDULE_TIMES:
-            hour, minute = map(int, schedule_time.split(':'))
-            schedule_dates.append(
-                datetime.datetime(
-                    year=current_date.year,
-                    month=current_date.month,
-                    day=current_date.day,
-                    hour=hour,
-                    minute=minute,
-                    tzinfo=TASHKENT_TZ,
-                )
-            )
-
-    return schedule_dates
+    try:
+        response = requests.get(GET_UPDATES_URL, params=params, timeout=timeout + 5)
+        response_data = response.json()
+        if not response_data.get("ok", False):
+            print("getUpdates failed:", json.dumps(response_data, ensure_ascii=False))
+            return []
+        return response_data.get("result", [])
+    except requests.RequestException as exc:
+        print("getUpdates request failed:", exc)
+        return []
+    except ValueError:
+        print("Invalid JSON response from getUpdates")
+        return []
 
 
 def send_scheduled_message(text: str, scheduled_datetime: datetime.datetime) -> None:
@@ -111,7 +102,7 @@ def send_scheduled_message(text: str, scheduled_datetime: datetime.datetime) -> 
 
     while True:
         try:
-            response = requests.post(TELEGRAM_API_URL, json=payload, timeout=15)
+            response = requests.post(SEND_MESSAGE_URL, json=payload, timeout=15)
             response_data = response.json()
         except requests.RequestException as exc:
             print(f"HTTP request failed for {scheduled_datetime.isoformat()}: {exc}")
@@ -137,18 +128,78 @@ def send_scheduled_message(text: str, scheduled_datetime: datetime.datetime) -> 
         return
 
 
+def send_text_message(chat_id: str, text: str) -> None:
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+
+    try:
+        requests.post(SEND_MESSAGE_URL, json=payload, timeout=15)
+    except requests.RequestException as exc:
+        print("send_text_message failed:", exc)
+
+
+def build_schedule_datetimes(start_datetime: datetime.datetime) -> list[datetime.datetime]:
+    schedule_datetimes = []
+    for i in range(len(POST_TEXTS)):
+        schedule_datetimes.append(start_datetime + datetime.timedelta(hours=4 * i))
+    return schedule_datetimes
+
+
+def get_command_start_time() -> datetime.datetime:
+    now = datetime.datetime.now(tz=TASHKENT_TZ)
+    return now + datetime.timedelta(seconds=60)
+
+
+def is_admin_message(message) -> bool:
+    from_user = message.get("from", {})
+    username = from_user.get("username", "")
+    return username.lower() == ADMIN_LINK.lstrip("@").lower()
+
+
+def process_updates():
+    offset = None
+    print("Bot ishlayapti. /begin buyruqini kutmoqda...")
+
+    while True:
+        updates = get_updates(offset=offset, timeout=20)
+        for update in updates:
+            offset = update["update_id"] + 1
+            message = update.get("message") or update.get("edited_message")
+            if not message:
+                continue
+
+            text = message.get("text", "")
+            chat_id = message["chat"]["id"]
+
+            if text and text.strip().lower() == "/begin":
+                if not is_admin_message(message):
+                    send_text_message(chat_id, "Faqat admin /begin buyrug'ini bera oladi.")
+                    continue
+
+                start_time = get_command_start_time()
+                schedule_datetimes = build_schedule_datetimes(start_time)
+
+                send_text_message(chat_id, f"Postlar {start_time.strftime('%Y-%m-%d %H:%M')} Tashkent va undan keyin har 4 soatda rejalashtiriladi.")
+                print(f"/begin buyruq topildi. Postlar {start_time.isoformat()} dan boshlanadi.")
+
+                for scheduled_datetime, text_post in zip(schedule_datetimes, POST_TEXTS):
+                    print(f"Rejalashtirish: {scheduled_datetime.strftime('%Y-%m-%d %H:%M')} | {text_post[:60]}...")
+                    send_scheduled_message(text_post, scheduled_datetime)
+                    time.sleep(REQUEST_DELAY_SECONDS)
+
+                send_text_message(chat_id, "Barcha postlar Telegramning schedule bo'limiga 4 soat oralig'ida belgilandi.")
+                print("Barcha 35 ta post rejalashtirildi.")
+                return
+
+        time.sleep(2)
+
+
 if __name__ == "__main__":
-    scheduled_datetimes = build_schedule_dates()
-
-    if len(scheduled_datetimes) != len(POST_TEXTS):
-        raise SystemExit("Scheduled times and post texts soni mos emas.")
-
-    for scheduled_datetime, text in zip(scheduled_datetimes, POST_TEXTS):
-        print(f"Rejalashtirish: {scheduled_datetime.strftime('%Y-%m-%d %H:%M')} | {text[:60]}...")
-        send_scheduled_message(text, scheduled_datetime)
-        time.sleep(REQUEST_DELAY_SECONDS)
-
-    print("\nBarcha 35 ta post Telegramning schudle bo'limiga rejalashtirildi.")
+    process_updates()
 
 # Requirements:
 # pip install requests
