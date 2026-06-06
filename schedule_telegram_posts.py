@@ -90,13 +90,23 @@ def get_updates(offset=None, timeout=20):
 
 
 def send_scheduled_message(text: str, scheduled_datetime: datetime.datetime) -> None:
+    # Ensure scheduled_datetime is converted to a proper UTC timestamp
+    # and enforce it to be safely in the future to avoid immediate posting.
+    # Some servers may interpret very-close timestamps as immediate, so
+    # if the scheduled time is <= now + 5s, push it forward by 60s.
     timestamp = int(scheduled_datetime.timestamp())
+    now_utc = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp())
+    if timestamp <= now_utc + 5:
+        # push schedule to at least 60 seconds in the future
+        timestamp = now_utc + 60
+        scheduled_datetime = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+
     payload = {
         "chat_id": CHANNEL_ID,
         "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
-        "scheduled_date": timestamp,
+        "scheduled_date": int(timestamp),
         "reply_markup": REPLY_MARKUP,
     }
 
