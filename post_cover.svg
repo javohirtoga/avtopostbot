@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#0c4a6e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="60" y="60" width="1080" height="510" rx="36" fill="#1e293b" opacity="0.95"/>
+  <text x="120" y="170" font-family="Segoe UI, Arial, sans-serif" font-size="56" fill="#f8fafc" font-weight="700">Beshariq - Qo'qon - Dangara</text>
+  <text x="120" y="240" font-family="Segoe UI, Arial, sans-serif" font-size="36" fill="#cbd5e1">Toshkent yo'nalishi uchun ishonchli va qulay avtobus xizmati.</text>
+  <text x="120" y="340" font-family="Segoe UI, Arial, sans-serif" font-size="32" fill="#e2e8f0">35 ta post, 7 kun, 5 ta vaqt - har bir post Telegram schudlega joylanadi.</text>
+  <text x="120" y="410" font-family="Segoe UI, Arial, sans-serif" font-size="28" fill="#94a3b8">@hushtam kanali uchun tayyorlangan matn va grafikani GitHub'da saqlang.</text>
+  <circle cx="980" cy="370" r="108" fill="#38bdf8" opacity="0.18"/>
+  <circle cx="980" cy="370" r="80" fill="#38bdf8" opacity="0.28"/>
+  <path d="M900 450 L1020 450 L1040 430 L1040 340 L900 340 Z" fill="#7dd3fc" opacity="0.55"/>
+  <path d="M920 330 L1020 330 L1040 310 L1040 280 L900 280 Z" fill="#e2e8f0" opacity="0.35"/>
+</svg>
